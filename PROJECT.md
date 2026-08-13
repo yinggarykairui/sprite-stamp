@@ -72,9 +72,9 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` Mirror toggle, paint-time twin write, dashed axis in `render()`
 
 **Increment 4 — memory**
-- `todo` `saveState()` with `try/catch`
-- `todo` `loadState()` total parse and validation
-- `todo` one-step Undo, undoable Clear, disabled states
+- `done` `saveState()` with `try/catch`
+- `done` `loadState()` total parse and validation
+- `done` one-step Undo, undoable Clear, disabled states
 
 **Increment 5 — export**
 - `todo` `toPng()` at 256×256 with transparency

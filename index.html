@@ -74,6 +74,7 @@
   }
   .row { display: grid; gap: 8px; }
   .row.tools { grid-template-columns: 1fr 1fr; }
+  .row.actions { grid-auto-flow: column; grid-auto-columns: 1fr; }
   .btn {
     height: 44px;
     padding: 0 8px;
@@ -122,6 +123,11 @@
       <button type="button" class="btn" id="mirror" aria-pressed="false">Mirror</button>
     </div>
 
+    <div class="row actions">
+      <button type="button" class="btn" id="undo" disabled>Undo</button>
+      <button type="button" class="btn" id="clear">Clear</button>
+    </div>
+
     <p class="status" id="status" aria-live="polite">Tap or drag to paint.</p>
   </div>
 
@@ -157,6 +163,55 @@
   };
 
   var layout = { cell: 0, cssPx: 0, dpr: 0 };
+
+  /* ---------- persistence: everything read back is hostile ---------- */
+
+  var STORE_KEY = 'sprite-stamp/v1';
+  /* A real record is a few hundred characters; anything huge is junk. */
+  var MAX_RAW = 100000;
+
+  function loadState() {
+    var raw = null;
+    try {
+      raw = window.localStorage.getItem(STORE_KEY);
+    } catch (e) { return; }
+    if (typeof raw !== 'string' || raw.length === 0 || raw.length > MAX_RAW) { return; }
+
+    var data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) { return; }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) { return; }
+
+    var pixels = data.pixels;
+    if (typeof pixels === 'string' && pixels.length === GRID * GRID) {
+      for (var i = 0; i < GRID * GRID; i++) {
+        var v = parseInt(pixels.charAt(i), 16);
+        state.pixels[i] = (isNaN(v) || v < 0 || v > 12) ? 0 : v;
+      }
+    }
+
+    var color = Math.floor(Number(data.color));
+    state.color = (isFinite(color) && color >= 1 && color <= 12) ? color : 1;
+    state.mirror = data.mirror === true;
+    state.erase = data.erase === true;
+  }
+
+  function saveState() {
+    var out = '';
+    for (var i = 0; i < GRID * GRID; i++) {
+      out += state.pixels[i].toString(16);
+    }
+    try {
+      window.localStorage.setItem(STORE_KEY, JSON.stringify({
+        v: 1,
+        pixels: out,
+        color: state.color,
+        mirror: state.mirror,
+        erase: state.erase
+      }));
+    } catch (e) { /* private mode and quota both throw; the board still works. */ }
+  }
 
   var canvas = document.getElementById('board');
   var ctx = canvas.getContext('2d');
@@ -306,7 +361,7 @@
     return { x: x, y: y };
   }
 
-  var stroke = { active: false, id: -1, last: null, changed: false };
+  var stroke = { active: false, id: -1, last: null, changed: false, before: null };
 
   function strokeValue() {
     return state.erase ? 0 : state.color;
@@ -318,6 +373,7 @@
     stroke.id = ev.pointerId;
     stroke.last = null;
     stroke.changed = false;
+    stroke.before = state.pixels.slice();
     try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* capture is best effort */ }
     moveStroke(ev);
   }
@@ -351,7 +407,13 @@
     stroke.active = false;
     stroke.last = null;
     stroke.id = -1;
+    if (stroke.changed) {
+      state.undo = stroke.before;
+      syncControls();
+      saveState();
+    }
     stroke.changed = false;
+    stroke.before = null;
   }
 
   canvas.addEventListener('pointerdown', function (ev) {
@@ -369,18 +431,22 @@
   var paletteEl = document.getElementById('palette');
   var eraseBtn = document.getElementById('erase');
   var mirrorBtn = document.getElementById('mirror');
+  var undoBtn = document.getElementById('undo');
+  var clearBtn = document.getElementById('clear');
   var swatches = [];
 
   function setColor(i) {
     state.color = i;
     state.erase = false;
     syncControls();
+    saveState();
     setStatus(RESTING);
   }
 
   function toggleErase() {
     state.erase = !state.erase;
     syncControls();
+    saveState();
     setStatus(state.erase ? 'Erasing.' : RESTING);
   }
 
@@ -388,7 +454,36 @@
     state.mirror = !state.mirror;
     syncControls();
     render();
+    saveState();
     setStatus(state.mirror ? 'Mirror on: both halves paint together.' : 'Mirror off.');
+  }
+
+  /* Exactly one step, one stroke deep. */
+  function undo() {
+    if (!state.undo) { return; }
+    state.pixels.set(state.undo);
+    state.undo = null;
+    syncControls();
+    render();
+    saveState();
+    setStatus('Undone.');
+  }
+
+  /* Clear counts as a stroke, so Undo brings the sprite back. */
+  function clearBoard() {
+    var before = state.pixels.slice();
+    var empty = true;
+    for (var i = 0; i < state.pixels.length; i++) {
+      if (state.pixels[i] !== 0) { empty = false; break; }
+    }
+    if (!empty) {
+      state.pixels.fill(0);
+      state.undo = before;
+    }
+    syncControls();
+    render();
+    saveState();
+    setStatus('Cleared.');
   }
 
   function syncControls() {
@@ -398,6 +493,7 @@
     }
     eraseBtn.setAttribute('aria-pressed', state.erase ? 'true' : 'false');
     mirrorBtn.setAttribute('aria-pressed', state.mirror ? 'true' : 'false');
+    undoBtn.disabled = !state.undo;
   }
 
   function buildUI() {
@@ -419,6 +515,8 @@
     }
     eraseBtn.addEventListener('click', toggleErase);
     mirrorBtn.addEventListener('click', toggleMirror);
+    undoBtn.addEventListener('click', undo);
+    clearBtn.addEventListener('click', clearBoard);
     syncControls();
   }
 
@@ -450,6 +548,7 @@
   window.addEventListener('orientationchange', relayout);
   watchDpr();
 
+  loadState();
   buildUI();
   relayout();
 }());
