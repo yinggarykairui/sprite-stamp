@@ -222,7 +222,7 @@
       <h2 id="paneltitle">Export</h2>
       <img class="shot" id="shot" width="256" height="256" alt="The sprite at 256 by 256 pixels">
       <a class="btn dl" id="download" download="sprite.png" href="#">Download sprite.png</a>
-      <p class="hint">On a phone you can also press and hold the image to save it.</p>
+      <p class="hint" id="hint" aria-live="polite">On a phone you can also press and hold the image to save it.</p>
       <button type="button" class="btn dl" id="close">Close</button>
     </div>
   </div>
@@ -607,6 +607,9 @@
   var shot = document.getElementById('shot');
   var downloadLink = document.getElementById('download');
   var closeBtn = document.getElementById('close');
+  var panelEl = scrim.querySelector('.panel');
+  var hintEl = document.getElementById('hint');
+  var HINT = hintEl.textContent;
 
   /* 16x16 blocks filled on a 256x256 canvas: no upscaling, so no smoothing
      question, and empty cells are never touched so they stay transparent. */
@@ -637,7 +640,30 @@
   function closeExport() {
     if (scrim.hidden) { return; }
     scrim.hidden = true;
+    hintEl.textContent = HINT;
     exportBtn.focus();
+  }
+
+  /* The panel says aria-modal, so focus has to behave that way: with the page
+     behind it still reachable, Tab could land on Undo and wipe the board while
+     the panel showed the old sprite. */
+  function trapTab(ev) {
+    if (scrim.hidden || ev.key !== 'Tab') { return; }
+    var stops = panelEl.querySelectorAll('a[href], button:not([disabled])');
+    if (!stops.length) { return; }
+    var first = stops[0];
+    var last = stops[stops.length - 1];
+    var here = document.activeElement;
+    if (!panelEl.contains(here)) {
+      ev.preventDefault();
+      (ev.shiftKey ? last : first).focus();
+    } else if (ev.shiftKey && here === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && here === last) {
+      ev.preventDefault();
+      first.focus();
+    }
   }
 
   function buildUI() {
@@ -664,6 +690,8 @@
     exportBtn.addEventListener('click', openExport);
     closeBtn.addEventListener('click', closeExport);
     downloadLink.addEventListener('click', function () {
+      /* Confirm where the reader is: the panel covers the status line. */
+      hintEl.textContent = 'Saved as sprite.png.';
       setStatus('Saved as sprite.png.');
     });
     scrim.addEventListener('click', function (ev) {
@@ -671,6 +699,11 @@
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') { closeExport(); }
+    });
+    document.addEventListener('keydown', trapTab, true);
+    /* Belt and braces: anything that lands outside the open panel comes back. */
+    document.addEventListener('focusin', function (ev) {
+      if (!scrim.hidden && !panelEl.contains(ev.target)) { closeBtn.focus(); }
     });
     syncControls();
   }
