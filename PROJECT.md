@@ -56,9 +56,9 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 ## Done-map
 
 **Increment 1 — skeleton and render** (v0 foundation)
-- `todo` `index.html` shell, inline CSS, page structure, canvas element
-- `todo` `PALETTE`, `state`, `measure()`, `render()` drawing a hardcoded test sprite
-- `todo` resize / orientationchange handling keyed on `{cssPx, dpr}`
+- `done` `index.html` shell, inline CSS, page structure, canvas element
+- `done` `PALETTE`, `state`, `measure()`, `render()` drawing a hardcoded test sprite
+- `done` resize / orientationchange handling keyed on `{cssPx, dpr}`
 
 **Increment 2 — painting** (v0 is real once this lands)
 - `todo` `cellFromPointer` with rect-based hit test

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sprite-stamp</title>
+<style>
+  :root {
+    --ink: #17181a;
+    --paper: #ffffff;
+    --muted: #8c929b;
+    --line: #d9dce1;
+    --bg: #fafbfc;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 16px;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  .wrap {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .hdr {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .hdr .name { font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+  .hdr .dims { font-size: 13px; color: var(--muted); }
+  .boardwrap { display: flex; justify-content: center; }
+  #board {
+    display: block;
+    /* touch-action lives on the canvas only, so the page still scrolls. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    /* box-shadow, not border: it must not enter getBoundingClientRect(). */
+    box-shadow: 0 0 0 1px var(--line);
+    cursor: crosshair;
+  }
+  .status {
+    margin: 0;
+    min-height: 20px;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--muted);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <span class="name">sprite-stamp</span>
+      <span class="dims">16 &times; 16</span>
+    </header>
+
+    <div class="boardwrap">
+      <canvas id="board" aria-label="16 by 16 pixel board, pointer only"></canvas>
+    </div>
+
+    <p class="status" id="status" aria-live="polite">Tap or drag to paint.</p>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- constants ---------- */
+
+  var GRID = 16;
+  var MIN_CELL = 12;
+  var MAX_CELL = 28;
+  /* Vertical space the rest of the page needs; the board takes what is left. */
+  var CHROME = 332;
+  var CHECK_A = '#f1f2f4';
+  var CHECK_B = '#e2e5e9';
+
+  var PALETTE = Object.freeze([
+    null,
+    '#17181a', '#4a4f57', '#8c929b', '#ffffff',
+    '#b23a34', '#e0714a', '#f0c04c', '#7fae4a',
+    '#2f7d5c', '#3f9aa8', '#3f63b5', '#7a54a3'
+  ]);
+
+  /* ---------- state: one array is the truth ---------- */
+
+  var state = {
+    pixels: new Uint8Array(GRID * GRID),
+    color: 1,
+    erase: false,
+    mirror: false,
+    undo: null
+  };
+
+  var layout = { cell: 0, cssPx: 0, dpr: 0 };
+
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  var boardwrap = canvas.parentNode;
+
+  /* Temporary until painting lands: proof that render() reads the array. */
+  (function testSprite() {
+    var cells = [[5, 4, 1], [10, 4, 1], [4, 9, 5], [5, 10, 5], [6, 10, 5],
+                 [7, 10, 5], [8, 10, 5], [9, 10, 5], [10, 10, 5], [11, 9, 5]];
+    for (var i = 0; i < cells.length; i++) {
+      state.pixels[cells[i][1] * GRID + cells[i][0]] = cells[i][2];
+    }
+  })();
+
+  /* ---------- layout ---------- */
+
+  function measure() {
+    var availW = boardwrap.clientWidth || (GRID * MIN_CELL);
+    var availH = window.innerHeight - CHROME;
+    var cell = Math.floor(Math.min(availW, availH) / GRID);
+    if (!isFinite(cell)) { cell = MIN_CELL; }
+    cell = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
+
+    var cssPx = cell * GRID;
+    var dpr = window.devicePixelRatio || 1;
+
+    /* Rebuild the backing store when either the CSS size or the dpr moved. */
+    if (cssPx !== layout.cssPx || dpr !== layout.dpr) {
+      canvas.style.width = cssPx + 'px';
+      canvas.style.height = cssPx + 'px';
+      canvas.width = Math.round(cssPx * dpr);
+      canvas.height = Math.round(cssPx * dpr);
+      layout.cell = cell;
+      layout.cssPx = cssPx;
+      layout.dpr = dpr;
+    }
+    /* Reset first, or the scale compounds on every resize. */
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(layout.dpr, layout.dpr);
+  }
+
+  /* ---------- render: the only thing that draws the board ---------- */
+
+  function render() {
+    var c = layout.cell;
+    var size = layout.cssPx;
+    var half = Math.round(c / 2);
+    var x, y, v, px, py;
+
+    ctx.clearRect(0, 0, size, size);
+
+    for (y = 0; y < GRID; y++) {
+      for (x = 0; x < GRID; x++) {
+        v = state.pixels[y * GRID + x];
+        px = x * c;
+        py = y * c;
+        if (v === 0) {
+          ctx.fillStyle = CHECK_A;
+          ctx.fillRect(px, py, c, c);
+          ctx.fillStyle = CHECK_B;
+          ctx.fillRect(px + half, py, c - half, half);
+          ctx.fillRect(px, py + half, half, c - half);
+        } else {
+          ctx.fillStyle = PALETTE[v];
+          ctx.fillRect(px, py, c, c);
+        }
+      }
+    }
+
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(23,24,26,0.12)';
+    ctx.beginPath();
+    for (var i = 1; i < GRID; i++) {
+      var p = i * c + 0.5;
+      ctx.moveTo(p, 0); ctx.lineTo(p, size);
+      ctx.moveTo(0, p); ctx.lineTo(size, p);
+    }
+    ctx.stroke();
+  }
+
+  /* ---------- resize / rotate / devicePixelRatio ---------- */
+
+  function relayout() {
+    measure();
+    render();
+  }
+
+  var dprQuery = null;
+  function onDprChange() {
+    relayout();
+    watchDpr();
+  }
+  function watchDpr() {
+    try {
+      if (dprQuery && dprQuery.removeEventListener) {
+        dprQuery.removeEventListener('change', onDprChange);
+      }
+      dprQuery = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+      if (dprQuery.addEventListener) {
+        dprQuery.addEventListener('change', onDprChange);
+      }
+    } catch (e) { /* matchMedia is optional here; resize still covers it. */ }
+  }
+
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', relayout);
+  watchDpr();
+
+  relayout();
+}());
+</script>
+</body>
+</html>
