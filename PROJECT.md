@@ -67,9 +67,9 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` `touch-action: none` on the canvas only
 
 **Increment 3 — tools**
-- `todo` palette buttons, selection ring, `setColor`
-- `todo` Erase toggle
-- `todo` Mirror toggle, paint-time twin write, dashed axis in `render()`
+- `done` palette buttons, selection ring, `setColor`
+- `done` Erase toggle
+- `done` Mirror toggle, paint-time twin write, dashed axis in `render()`
 
 **Increment 4 — memory**
 - `todo` `saveState()` with `try/catch`

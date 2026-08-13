@@ -51,6 +51,49 @@
     box-shadow: 0 0 0 1px var(--line);
     cursor: crosshair;
   }
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .sw {
+    height: 40px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  /* Two-tone ring: inner paper gap, outer ink — reads on black and on white. */
+  .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+  .sw.hairline { box-shadow: inset 0 0 0 1px var(--line); }
+  .sw.hairline[aria-pressed="true"] {
+    box-shadow: inset 0 0 0 1px var(--line), 0 0 0 2px var(--paper), 0 0 0 4px var(--ink);
+  }
+  .row { display: grid; gap: 8px; }
+  .row.tools { grid-template-columns: 1fr 1fr; }
+  .btn {
+    height: 44px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .btn[aria-pressed="true"] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+  .btn:disabled { color: var(--muted); cursor: default; }
+  .btn:focus-visible, .sw:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   .status {
     margin: 0;
     min-height: 20px;
@@ -70,6 +113,13 @@
 
     <div class="boardwrap">
       <canvas id="board" aria-label="16 by 16 pixel board, pointer only"></canvas>
+    </div>
+
+    <div class="palette" id="palette" role="group" aria-label="Palette"></div>
+
+    <div class="row tools">
+      <button type="button" class="btn" id="erase" aria-pressed="false">Erase</button>
+      <button type="button" class="btn" id="mirror" aria-pressed="false">Mirror</button>
     </div>
 
     <p class="status" id="status" aria-live="polite">Tap or drag to paint.</p>
@@ -176,19 +226,56 @@
       ctx.moveTo(0, p); ctx.lineTo(size, p);
     }
     ctx.stroke();
+
+    if (state.mirror) {
+      /* Alternating light/dark dashes, so the axis reads over any colour. */
+      var ax = 8 * c;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.lineDashOffset = 0;
+      ctx.strokeStyle = 'rgba(23,24,26,0.85)';
+      ctx.beginPath(); ctx.moveTo(ax, 0); ctx.lineTo(ax, size); ctx.stroke();
+      ctx.lineDashOffset = 6;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath(); ctx.moveTo(ax, 0); ctx.lineTo(ax, size); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+      ctx.lineWidth = 1;
+    }
+  }
+
+  /* ---------- status line ---------- */
+
+  var RESTING = 'Tap or drag to paint.';
+  var statusEl = document.getElementById('status');
+  var statusTimer = 0;
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+    if (statusTimer) { clearTimeout(statusTimer); statusTimer = 0; }
+    if (text !== RESTING) {
+      statusTimer = setTimeout(function () {
+        statusEl.textContent = RESTING;
+        statusTimer = 0;
+      }, 2400);
+    }
   }
 
   /* ---------- writing ---------- */
 
-  /* The only function that mutates board content. */
+  /* The only function that mutates board content. Mirror is a write,
+     not a view: the twin at 15 - x is written here and nowhere else. */
   function write(x, y, value) {
-    if (x < 0 || x >= GRID || y < 0 || y >= GRID) { return false; }
-    var changed = false;
-    if (state.pixels[y * GRID + x] !== value) {
-      state.pixels[y * GRID + x] = value;
-      changed = true;
-    }
+    var changed = poke(x, y, value);
+    if (state.mirror && poke(GRID - 1 - x, y, value)) { changed = true; }
     return changed;
+  }
+
+  function poke(x, y, value) {
+    if (x < 0 || x >= GRID || y < 0 || y >= GRID) { return false; }
+    if (state.pixels[y * GRID + x] === value) { return false; }
+    state.pixels[y * GRID + x] = value;
+    return true;
   }
 
   /* Bresenham, so a fast drag leaves no gaps. */
@@ -277,6 +364,64 @@
   /* A release outside the window fires only this one on some builds. */
   canvas.addEventListener('lostpointercapture', endStroke);
 
+  /* ---------- tools ---------- */
+
+  var paletteEl = document.getElementById('palette');
+  var eraseBtn = document.getElementById('erase');
+  var mirrorBtn = document.getElementById('mirror');
+  var swatches = [];
+
+  function setColor(i) {
+    state.color = i;
+    state.erase = false;
+    syncControls();
+    setStatus(RESTING);
+  }
+
+  function toggleErase() {
+    state.erase = !state.erase;
+    syncControls();
+    setStatus(state.erase ? 'Erasing.' : RESTING);
+  }
+
+  function toggleMirror() {
+    state.mirror = !state.mirror;
+    syncControls();
+    render();
+    setStatus(state.mirror ? 'Mirror on: both halves paint together.' : 'Mirror off.');
+  }
+
+  function syncControls() {
+    for (var i = 0; i < swatches.length; i++) {
+      swatches[i].setAttribute('aria-pressed',
+        (!state.erase && state.color === i + 1) ? 'true' : 'false');
+    }
+    eraseBtn.setAttribute('aria-pressed', state.erase ? 'true' : 'false');
+    mirrorBtn.setAttribute('aria-pressed', state.mirror ? 'true' : 'false');
+  }
+
+  function buildUI() {
+    for (var i = 1; i < PALETTE.length; i++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sw';
+      /* The white swatch needs a hairline so it is visible against the page. */
+      if (i === 4) { b.className += ' hairline'; }
+      b.style.background = PALETTE[i];
+      b.setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-label', 'Colour ' + i);
+      b.setAttribute('data-index', String(i));
+      b.addEventListener('click', function (ev) {
+        setColor(parseInt(ev.currentTarget.getAttribute('data-index'), 10));
+      });
+      paletteEl.appendChild(b);
+      swatches.push(b);
+    }
+    eraseBtn.addEventListener('click', toggleErase);
+    mirrorBtn.addEventListener('click', toggleMirror);
+    syncControls();
+  }
+
   /* ---------- resize / rotate / devicePixelRatio ---------- */
 
   function relayout() {
@@ -305,6 +450,7 @@
   window.addEventListener('orientationchange', relayout);
   watchDpr();
 
+  buildUI();
   relayout();
 }());
 </script>
