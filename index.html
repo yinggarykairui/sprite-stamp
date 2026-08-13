@@ -10,8 +10,8 @@
   :root {
     --ink: #17181a;
     --paper: #ffffff;
-    --muted: #8c929b;
-    --line: #d9dce1;
+    --muted: #686e77;
+    --line: #8c929b;
     --bg: #fafbfc;
   }
   * { box-sizing: border-box; }
@@ -95,8 +95,19 @@
     border-color: var(--ink);
     color: var(--paper);
   }
+  /* Toggles wear a pill track and read empty when off, so a stranger can tell
+     the two modes from the three actions before pressing anything. */
+  .row.tools .btn { border-radius: 22px; }
+  .row.tools .btn[aria-pressed="false"] { background: transparent; }
   .btn:disabled { color: var(--muted); cursor: default; }
   .btn:focus-visible, .sw:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .btn:hover { border-color: var(--ink); }
+  .btn, .sw { transition: transform 90ms ease; }
+  .btn:active, .sw:active { transform: scale(.97); }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .sw { transition: none; }
+    .btn:active, .sw:active { transform: none; }
+  }
   .scrim {
     position: fixed;
     inset: 0;
@@ -142,6 +153,13 @@
     justify-content: center;
     text-decoration: none;
   }
+  /* The primary action at the one shareable moment: same inverted ink the
+     pressed toggles already use, so Close stays the quiet one. */
+  #download {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
   .hint { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); text-align: center; }
   .status {
     margin: 0;
@@ -174,7 +192,7 @@
     <div class="row actions">
       <button type="button" class="btn" id="undo" disabled>Undo</button>
       <button type="button" class="btn" id="clear">Clear</button>
-      <button type="button" class="btn" id="export">Export PNG</button>
+      <button type="button" class="btn" id="export" aria-label="Export PNG">Export</button>
     </div>
 
     <p class="status" id="status" aria-live="polite">Tap or drag to paint.</p>
