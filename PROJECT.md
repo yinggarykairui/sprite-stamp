@@ -81,8 +81,8 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` export panel, download link, Escape/backdrop close, status line
 
 **Increment 6 — ship**
-- `todo` 390×844 pass: reach, tap sizes, rotate, no horizontal scroll
-- `todo` hostile-localStorage pass over all eight bad values
+- `done` 390×844 pass: reach, tap sizes, rotate, no horizontal scroll
+- `done` hostile-localStorage pass over all eight bad values
 - `todo` `screenshot.png` taken from the shipped build at phone width, mirror on
 - `todo` README verified as a cold sequence
 - `todo` LICENSE, repo description, topics, Pages enabled, demo link loads
