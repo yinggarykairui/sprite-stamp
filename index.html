@@ -248,6 +248,14 @@
     '#2f7d5c', '#3f9aa8', '#3f63b5', '#7a54a3'
   ]);
 
+  /* Parallel to PALETTE, so a swatch announces its colour and not its number. */
+  var COLOUR_NAMES = Object.freeze([
+    null,
+    'Black', 'Dark grey', 'Grey', 'White',
+    'Red', 'Orange', 'Yellow', 'Green',
+    'Dark green', 'Teal', 'Blue', 'Purple'
+  ]);
+
   /* ---------- state: one array is the truth ---------- */
 
   var state = {
@@ -521,9 +529,14 @@
   }
 
   canvas.addEventListener('pointerdown', function (ev) {
+    /* Only a primary button paints: a right or middle press must not draw,
+       and must not arm undo behind the context menu. */
+    if (ev.button !== 0) { return; }
     ev.preventDefault();
     beginStroke(ev);
   });
+  /* "Save image as" on the artboard must not also edit it. */
+  canvas.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
   canvas.addEventListener('pointermove', moveStroke);
   canvas.addEventListener('pointerup', endStroke);
   canvas.addEventListener('pointercancel', endStroke);
@@ -666,6 +679,52 @@
     }
   }
 
+  /* ---------- control activation ---------- */
+
+  /* Chromium only synthesises a click for the primary touch pointer, so with a
+     finger resting on the board a second finger tapping a button got
+     pointerdown and pointerup but no click, and every control was dead until
+     the first finger lifted. Non-primary touch taps are activated from
+     pointerup instead, and the click that may still follow is swallowed.
+     The swallow is disarmed two ways — by the click it was meant for, and by
+     the next press on the control — so a click that never arrives can never
+     leave the control dead. */
+  var TOUCH_CLICK_WINDOW = 500;
+
+  function over(el, ev) {
+    /* Touch takes implicit pointer capture, so pointerup lands here even when
+       the finger has slid away. A release outside the box is not a tap. */
+    var r = el.getBoundingClientRect();
+    return ev.clientX >= r.left && ev.clientX <= r.right &&
+           ev.clientY >= r.top && ev.clientY <= r.bottom;
+  }
+
+  function onActivate(el, fn) {
+    var downId = -1;
+    var firedAt = 0;
+    el.addEventListener('pointerdown', function (ev) {
+      /* A fresh press: any swallow still pending belongs to an older tap. */
+      firedAt = 0;
+      if (ev.pointerType === 'touch' && !ev.isPrimary) { downId = ev.pointerId; }
+    });
+    el.addEventListener('pointercancel', function (ev) {
+      if (ev.pointerId === downId) { downId = -1; }
+    });
+    el.addEventListener('pointerup', function (ev) {
+      if (ev.pointerId !== downId) { return; }
+      downId = -1;
+      if (ev.pointerType !== 'touch' || ev.isPrimary || el.disabled) { return; }
+      if (!over(el, ev)) { return; }
+      firedAt = Date.now();
+      fn(ev);
+    });
+    el.addEventListener('click', function (ev) {
+      if (firedAt && Date.now() - firedAt < TOUCH_CLICK_WINDOW) { firedAt = 0; return; }
+      firedAt = 0;
+      fn(ev);
+    });
+  }
+
   function buildUI() {
     for (var i = 1; i < PALETTE.length; i++) {
       var b = document.createElement('button');
@@ -675,20 +734,19 @@
       if (i === 4) { b.className += ' hairline'; }
       b.style.background = PALETTE[i];
       b.setAttribute('aria-pressed', 'false');
-      b.setAttribute('aria-label', 'Colour ' + i);
-      b.setAttribute('data-index', String(i));
-      b.addEventListener('click', function (ev) {
-        setColor(parseInt(ev.currentTarget.getAttribute('data-index'), 10));
-      });
+      b.setAttribute('aria-label', COLOUR_NAMES[i]);
+      (function (idx) {
+        onActivate(b, function () { setColor(idx); });
+      }(i));
       paletteEl.appendChild(b);
       swatches.push(b);
     }
-    eraseBtn.addEventListener('click', toggleErase);
-    mirrorBtn.addEventListener('click', toggleMirror);
-    undoBtn.addEventListener('click', undo);
-    clearBtn.addEventListener('click', clearBoard);
-    exportBtn.addEventListener('click', openExport);
-    closeBtn.addEventListener('click', closeExport);
+    onActivate(eraseBtn, toggleErase);
+    onActivate(mirrorBtn, toggleMirror);
+    onActivate(undoBtn, undo);
+    onActivate(clearBtn, clearBoard);
+    onActivate(exportBtn, openExport);
+    onActivate(closeBtn, closeExport);
     downloadLink.addEventListener('click', function () {
       /* Confirm where the reader is: the panel covers the status line. */
       hintEl.textContent = 'Saved as sprite.png.';
