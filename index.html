@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>sprite-stamp</title>
+<!-- Inline empty icon: keeps the browser from requesting /favicon.ico. -->
+<link rel="icon" href="data:,">
 <style>
   :root {
     --ink: #17181a;
@@ -159,7 +161,7 @@
     </header>
 
     <div class="boardwrap">
-      <canvas id="board" aria-label="16 by 16 pixel board, pointer only"></canvas>
+      <canvas id="board" aria-label="16 by 16 pixel board. Pointer only: tap or drag to paint. There is no keyboard painting; the buttons below are focusable."></canvas>
     </div>
 
     <div class="palette" id="palette" role="group" aria-label="Palette"></div>
