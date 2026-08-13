@@ -112,15 +112,6 @@
   var ctx = canvas.getContext('2d');
   var boardwrap = canvas.parentNode;
 
-  /* Temporary until painting lands: proof that render() reads the array. */
-  (function testSprite() {
-    var cells = [[5, 4, 1], [10, 4, 1], [4, 9, 5], [5, 10, 5], [6, 10, 5],
-                 [7, 10, 5], [8, 10, 5], [9, 10, 5], [10, 10, 5], [11, 9, 5]];
-    for (var i = 0; i < cells.length; i++) {
-      state.pixels[cells[i][1] * GRID + cells[i][0]] = cells[i][2];
-    }
-  })();
-
   /* ---------- layout ---------- */
 
   function measure() {
@@ -186,6 +177,105 @@
     }
     ctx.stroke();
   }
+
+  /* ---------- writing ---------- */
+
+  /* The only function that mutates board content. */
+  function write(x, y, value) {
+    if (x < 0 || x >= GRID || y < 0 || y >= GRID) { return false; }
+    var changed = false;
+    if (state.pixels[y * GRID + x] !== value) {
+      state.pixels[y * GRID + x] = value;
+      changed = true;
+    }
+    return changed;
+  }
+
+  /* Bresenham, so a fast drag leaves no gaps. */
+  function line(x0, y0, x1, y1, value) {
+    var dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    var dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    var err = dx + dy, e2;
+    var changed = false;
+    for (;;) {
+      if (write(x0, y0, value)) { changed = true; }
+      if (x0 === x1 && y0 === y1) { break; }
+      e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+    return changed;
+  }
+
+  /* ---------- pointer ---------- */
+
+  /* Always from the live rect; never from a stored cell constant. */
+  function cellFromPointer(ev) {
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) { return null; }
+    var x = Math.floor((ev.clientX - rect.left) / (rect.width / GRID));
+    var y = Math.floor((ev.clientY - rect.top) / (rect.height / GRID));
+    if (x < 0 || x >= GRID || y < 0 || y >= GRID) { return null; }
+    return { x: x, y: y };
+  }
+
+  var stroke = { active: false, id: -1, last: null, changed: false };
+
+  function strokeValue() {
+    return state.erase ? 0 : state.color;
+  }
+
+  function beginStroke(ev) {
+    if (stroke.active) { return; }
+    stroke.active = true;
+    stroke.id = ev.pointerId;
+    stroke.last = null;
+    stroke.changed = false;
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* capture is best effort */ }
+    moveStroke(ev);
+  }
+
+  function moveStroke(ev) {
+    if (!stroke.active || ev.pointerId !== stroke.id) { return; }
+    var cell = cellFromPointer(ev);
+    if (!cell) {
+      /* Outside the board: skip, and forget the last cell so re-entry
+         starts a fresh segment instead of drawing a chord. */
+      stroke.last = null;
+      return;
+    }
+    var value = strokeValue();
+    var changed;
+    if (stroke.last) {
+      changed = line(stroke.last.x, stroke.last.y, cell.x, cell.y, value);
+    } else {
+      changed = write(cell.x, cell.y, value);
+    }
+    stroke.last = cell;
+    if (changed) {
+      stroke.changed = true;
+      render();
+    }
+  }
+
+  function endStroke(ev) {
+    if (!stroke.active) { return; }
+    if (ev && ev.pointerId !== undefined && ev.pointerId !== stroke.id) { return; }
+    stroke.active = false;
+    stroke.last = null;
+    stroke.id = -1;
+    stroke.changed = false;
+  }
+
+  canvas.addEventListener('pointerdown', function (ev) {
+    ev.preventDefault();
+    beginStroke(ev);
+  });
+  canvas.addEventListener('pointermove', moveStroke);
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+  /* A release outside the window fires only this one on some builds. */
+  canvas.addEventListener('lostpointercapture', endStroke);
 
   /* ---------- resize / rotate / devicePixelRatio ---------- */
 

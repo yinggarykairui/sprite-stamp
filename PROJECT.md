@@ -61,10 +61,10 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` resize / orientationchange handling keyed on `{cssPx, dpr}`
 
 **Increment 2 — painting** (v0 is real once this lands)
-- `todo` `cellFromPointer` with rect-based hit test
-- `todo` `beginStroke` / `moveStroke` / `endStroke` with pointer capture
-- `todo` Bresenham interpolation between moves
-- `todo` `touch-action: none` on the canvas only
+- `done` `cellFromPointer` with rect-based hit test
+- `done` `beginStroke` / `moveStroke` / `endStroke` with pointer capture
+- `done` Bresenham interpolation between moves
+- `done` `touch-action: none` on the canvas only
 
 **Increment 3 — tools**
 - `todo` palette buttons, selection ring, `setColor`
