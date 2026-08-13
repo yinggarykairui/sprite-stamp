@@ -95,6 +95,52 @@
   }
   .btn:disabled { color: var(--muted); cursor: default; }
   .btn:focus-visible, .sw:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    padding: 16px;
+    background: rgba(23, 24, 26, .55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+  }
+  .scrim[hidden] { display: none; }
+  .panel {
+    background: var(--paper);
+    border-radius: 12px;
+    padding: 16px;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .panel h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .shot {
+    width: 256px;
+    height: 256px;
+    max-width: 100%;
+    display: block;
+    image-rendering: pixelated;
+    background-color: #f1f2f4;
+    background-image:
+      linear-gradient(45deg, #e2e5e9 25%, transparent 25%, transparent 75%, #e2e5e9 75%),
+      linear-gradient(45deg, #e2e5e9 25%, transparent 25%, transparent 75%, #e2e5e9 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .dl {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+  .hint { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); text-align: center; }
   .status {
     margin: 0;
     min-height: 20px;
@@ -126,9 +172,20 @@
     <div class="row actions">
       <button type="button" class="btn" id="undo" disabled>Undo</button>
       <button type="button" class="btn" id="clear">Clear</button>
+      <button type="button" class="btn" id="export">Export PNG</button>
     </div>
 
     <p class="status" id="status" aria-live="polite">Tap or drag to paint.</p>
+  </div>
+
+  <div class="scrim" id="scrim" hidden>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="paneltitle">
+      <h2 id="paneltitle">Export</h2>
+      <img class="shot" id="shot" width="256" height="256" alt="The sprite at 256 by 256 pixels">
+      <a class="btn dl" id="download" download="sprite.png" href="#">Download sprite.png</a>
+      <p class="hint">On a phone you can also press and hold the image to save it.</p>
+      <button type="button" class="btn dl" id="close">Close</button>
+    </div>
   </div>
 
 <script>
@@ -496,6 +553,46 @@
     undoBtn.disabled = !state.undo;
   }
 
+  /* ---------- export ---------- */
+
+  var exportBtn = document.getElementById('export');
+  var scrim = document.getElementById('scrim');
+  var shot = document.getElementById('shot');
+  var downloadLink = document.getElementById('download');
+  var closeBtn = document.getElementById('close');
+
+  /* 16x16 blocks filled on a 256x256 canvas: no upscaling, so no smoothing
+     question, and empty cells are never touched so they stay transparent. */
+  function toPng() {
+    var off = document.createElement('canvas');
+    off.width = 256;
+    off.height = 256;
+    var octx = off.getContext('2d');
+    for (var y = 0; y < GRID; y++) {
+      for (var x = 0; x < GRID; x++) {
+        var v = state.pixels[y * GRID + x];
+        if (v === 0) { continue; }
+        octx.fillStyle = PALETTE[v];
+        octx.fillRect(x * 16, y * 16, 16, 16);
+      }
+    }
+    return off.toDataURL('image/png');
+  }
+
+  function openExport() {
+    var uri = toPng();
+    shot.src = uri;
+    downloadLink.href = uri;
+    scrim.hidden = false;
+    closeBtn.focus();
+  }
+
+  function closeExport() {
+    if (scrim.hidden) { return; }
+    scrim.hidden = true;
+    exportBtn.focus();
+  }
+
   function buildUI() {
     for (var i = 1; i < PALETTE.length; i++) {
       var b = document.createElement('button');
@@ -517,6 +614,17 @@
     mirrorBtn.addEventListener('click', toggleMirror);
     undoBtn.addEventListener('click', undo);
     clearBtn.addEventListener('click', clearBoard);
+    exportBtn.addEventListener('click', openExport);
+    closeBtn.addEventListener('click', closeExport);
+    downloadLink.addEventListener('click', function () {
+      setStatus('Saved as sprite.png.');
+    });
+    scrim.addEventListener('click', function (ev) {
+      if (ev.target === scrim) { closeExport(); }
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') { closeExport(); }
+    });
     syncControls();
   }
 

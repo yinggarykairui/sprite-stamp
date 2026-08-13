@@ -77,8 +77,8 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` one-step Undo, undoable Clear, disabled states
 
 **Increment 5 — export**
-- `todo` `toPng()` at 256×256 with transparency
-- `todo` export panel, download link, Escape/backdrop close, status line
+- `done` `toPng()` at 256×256 with transparency
+- `done` export panel, download link, Escape/backdrop close, status line
 
 **Increment 6 — ship**
 - `todo` 390×844 pass: reach, tap sizes, rotate, no horizontal scroll
