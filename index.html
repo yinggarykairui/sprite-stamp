@@ -19,7 +19,6 @@
   body {
     margin: 0;
     padding: 16px;
-    min-height: 100%;
     background: var(--bg);
     color: var(--ink);
     font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -286,6 +285,9 @@
       data = JSON.parse(raw);
     } catch (e) { return; }
     if (!data || typeof data !== 'object' || Array.isArray(data)) { return; }
+    /* Only the encoding this build writes. A future v2 record must start
+       empty rather than be read as if it were v1. */
+    if (data.v !== 1) { return; }
 
     var pixels = data.pixels;
     if (typeof pixels === 'string' && pixels.length === GRID * GRID) {
@@ -361,7 +363,6 @@
   function render() {
     var c = layout.cell;
     var size = layout.cssPx;
-    var half = Math.round(c / 2);
     var x, y, v, px, py;
 
     ctx.clearRect(0, 0, size, size);
@@ -372,11 +373,11 @@
         px = x * c;
         py = y * c;
         if (v === 0) {
-          ctx.fillStyle = CHECK_A;
+          /* One checker square per cell: at half-cell period the empty board
+             read as 32 columns and the first tap landed on a cell twice the
+             size the eye had aimed at. */
+          ctx.fillStyle = ((x + y) & 1) ? CHECK_B : CHECK_A;
           ctx.fillRect(px, py, c, c);
-          ctx.fillStyle = CHECK_B;
-          ctx.fillRect(px + half, py, c - half, half);
-          ctx.fillRect(px, py + half, half, c - half);
         } else {
           ctx.fillStyle = PALETTE[v];
           ctx.fillRect(px, py, c, c);
@@ -414,15 +415,23 @@
   /* ---------- status line ---------- */
 
   var RESTING = 'Tap or drag to paint.';
+  var RESTING_ERASE = 'Erasing.';
   var statusEl = document.getElementById('status');
   var statusTimer = 0;
+
+  /* The resting line is derived from state, not a constant: while erase is on
+     the page's only instruction has to say so, including after a reload and
+     after a transient message times out. */
+  function restingText() {
+    return state.erase ? RESTING_ERASE : RESTING;
+  }
 
   function setStatus(text) {
     statusEl.textContent = text;
     if (statusTimer) { clearTimeout(statusTimer); statusTimer = 0; }
-    if (text !== RESTING) {
+    if (text !== restingText()) {
       statusTimer = setTimeout(function () {
-        statusEl.textContent = RESTING;
+        statusEl.textContent = restingText();
         statusTimer = 0;
       }, 2400);
     }
@@ -557,14 +566,14 @@
     state.erase = false;
     syncControls();
     saveState();
-    setStatus(RESTING);
+    setStatus(restingText());
   }
 
   function toggleErase() {
     state.erase = !state.erase;
     syncControls();
     saveState();
-    setStatus(state.erase ? 'Erasing.' : RESTING);
+    setStatus(restingText());
   }
 
   function toggleMirror() {
@@ -593,14 +602,16 @@
     for (var i = 0; i < state.pixels.length; i++) {
       if (state.pixels[i] !== 0) { empty = false; break; }
     }
+    /* An already-empty board is not cleared: do not announce it and do not
+       write a record for it. */
     if (!empty) {
       state.pixels.fill(0);
       state.undo = before;
+      syncControls();
+      render();
+      saveState();
+      setStatus('Cleared.');
     }
-    syncControls();
-    render();
-    saveState();
-    setStatus('Cleared.');
   }
 
   function syncControls() {
@@ -796,6 +807,9 @@
 
   loadState();
   buildUI();
+  /* A restored erase mode has to be readable on the cold page too. Only
+     touched when it differs, so the live region stays quiet on load. */
+  if (statusEl.textContent !== restingText()) { setStatus(restingText()); }
   relayout();
 }());
 </script>
