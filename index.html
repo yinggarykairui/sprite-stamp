@@ -156,6 +156,11 @@
        aspect-ratio never applies. */
     height: auto;
     aspect-ratio: 1;
+    /* A landscape phone is shorter than a 320px preview plus the buttons under
+       it. The cap is on the width, because Chrome clamps a max-height without
+       giving the width back and the preview would be squashed; with
+       aspect-ratio the height follows the width, so this caps both. */
+    max-width: 42vh;
     display: block;
     image-rendering: pixelated;
     background-color: #f1f2f4;
@@ -660,11 +665,18 @@
   }
 
   function openExport() {
+    /* A second finger can open the panel while the first is still painting.
+       End the stroke first, or the PNG is built from a board that keeps
+       changing underneath the picture of it. */
+    endStroke();
     var uri = toPng();
     shot.src = uri;
     downloadLink.href = uri;
     scrim.hidden = false;
-    closeBtn.focus();
+    /* The panel exists to show the sprite: it has to open at its own top, and
+       focusing Close must not scroll it away. */
+    scrim.scrollTop = 0;
+    closeBtn.focus({ preventScroll: true });
   }
 
   function closeExport() {
