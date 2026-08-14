@@ -18,7 +18,9 @@
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    padding: 16px;
+    /* 12px sides, so the 256px minimum board still clears a 280px viewport
+       without a horizontal scrollbar. The column stays centred either way. */
+    padding: 16px 12px;
     background: var(--bg);
     color: var(--ink);
     font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -233,8 +235,8 @@
   /* ---------- constants ---------- */
 
   var GRID = 16;
-  var MIN_CELL = 12;
-  var MAX_CELL = 28;
+  /* 16 x 16 = the 256 CSS px board the spec sets as the floor. */
+  var MIN_CELL = 16;
   /* Vertical space the rest of the page needs; the board takes what is left. */
   var CHROME = 332;
   var CHECK_A = '#f1f2f4';
@@ -332,11 +334,15 @@
     var byH = Math.floor(availH / GRID);
     var cell = Math.min(byW, byH);
     /* Once height alone would push the cell under the floor, height stops
-       deciding: take the cell from the width and let the page scroll, which
-       is what the spec asks for on a short viewport. */
-    if (!isFinite(cell) || cell < MIN_CELL) { cell = byW; }
+       deciding — but it still caps the cell, so the board never *grows* as the
+       viewport shrinks. Below the floor the board sits at 16 px cells and the
+       page scrolls, which is what the spec asks for on a short viewport. */
+    if (!isFinite(cell) || cell < MIN_CELL) {
+      cell = Math.min(byW, Math.max(MIN_CELL, byH));
+    }
     if (!isFinite(cell)) { cell = MIN_CELL; }
-    cell = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
+    /* No upper clamp: .wrap's 420px max-width already caps the cell at 26. */
+    cell = Math.max(MIN_CELL, cell);
 
     var cssPx = cell * GRID;
     /* Published so every row can be exactly as wide as the board. */
