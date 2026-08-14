@@ -405,27 +405,23 @@
       }
     }
 
-    /* One ink hairline vanishes over the dark half of the palette — over black
-       it measured 1.00:1, no line at all — and one white hairline vanishes over
-       the light half. So the grid is stroked twice in alternating dashes, the
-       trick the mirror axis already uses: whichever pass the fill swallows, the
-       other one reads. Still one pixel wide, so it stays quiet. */
+    /* A quiet ink hairline. It measures 1.00:1 over black — i.e. it disappears
+       — and that is the specified behaviour, not a defect: adjacent dark cells
+       are meant to merge into one shape. A cycle-3 review proposed the mirror
+       axis's two-tone dash trick here to force 3:1 over every fill; it worked
+       (1.00–1.28 → 2.17–4.49) and was reverted anyway, because it turns the
+       board into a lattice and chops the sprite into 256 labelled boxes. The
+       axis needs to read over any colour because it is an explanation; the
+       grid does not, because it is scaffolding. */
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(23,24,26,0.12)';
     ctx.beginPath();
     for (var i = 1; i < GRID; i++) {
       var p = i * c + 0.5;
       ctx.moveTo(p, 0); ctx.lineTo(p, size);
       ctx.moveTo(0, p); ctx.lineTo(size, p);
     }
-    ctx.lineDashOffset = 0;
-    ctx.strokeStyle = 'rgba(23,24,26,0.45)';
     ctx.stroke();
-    ctx.lineDashOffset = 4;
-    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
 
     if (state.mirror) {
       /* Alternating light/dark dashes, so the axis reads over any colour. */
