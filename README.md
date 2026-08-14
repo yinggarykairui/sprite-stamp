@@ -2,13 +2,13 @@
 
 A 16×16 pixel-art editor in a single HTML file: paint with your thumb, mirror down the middle, save a PNG.
 
-![screenshot](screenshot.png)
+![The editor at phone width: the board with a sprite on its checkered transparency, mirror mode on so the dashed centre line is visible, the twelve-colour palette below it, and the Erase, Mirror, Undo, Clear and Export buttons under that.](screenshot.png)
 
 **[Live demo](https://yinggarykairui.github.io/sprite-stamp/)**
 
 ## What it does
 
-Tap or drag on the 16×16 board to paint with one of twelve fixed colours. Mirror mode paints the left–right twin of every cell you touch, so a symmetrical creature takes half the strokes; turn it off and what you painted stays put. Erase turns painting into rubbing out, Undo takes back the last stroke — one step — and Clear empties the board, itself undoable. The sprite is saved in your browser as you go, so a reload brings it back. Export writes a 256×256 PNG with transparent empty cells and hands you a download link. The screenshot shows the editor at phone width: the board with a small sprite on its checkered transparency, mirror mode on so the dashed centre line is visible, the twelve-colour palette below it, and the Erase, Mirror, Undo, Clear and Export buttons under that.
+Tap or drag on the 16×16 board to paint with one of twelve fixed colours. Mirror mode paints the left–right twin of every cell you touch, so a symmetrical creature takes half the strokes; turn it off and what you painted stays put. Erase turns painting into rubbing out, Undo takes back the last stroke — one step — and Clear empties the board, itself undoable. The sprite is saved in your browser as you go, so a reload brings it back. Export writes a 256×256 PNG with transparent empty cells and hands you a download link.
 
 ## How to run
 

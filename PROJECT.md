@@ -43,20 +43,20 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 
 ### Functions
 
-- `loadState()` — reads `localStorage['sprite-stamp/v1']` inside `try/catch`, parses inside `try/catch`, requires `v === 1`, validates every field. Returns nothing: it mutates the module-level `state` in place, and simply leaves it at its blank defaults when the record is absent, oversized, unparseable or of another version. Never throws.
+- `loadState()` — reads `localStorage['sprite-stamp/v1']` inside `try/catch`, parses inside `try/catch`, requires `v === 1`, validates every field. `pixels` is scanned whole before anything is written: one character outside hex 0–12 rejects the whole string and the board stays blank, rather than that cell being zeroed. Returns nothing: it mutates the module-level `state` in place, and simply leaves it at its blank defaults when the record is absent, oversized, unparseable or of another version. Never throws.
 - `saveState()` — serialises `pixels` to 256 hex chars plus `color`, `erase`, `mirror`; `try/catch` around `setItem` (quota, private mode).
-- `measure()` — computes `cell` from the viewport, sets the canvas CSS size to `cell * 16` px, sets the backing size to `cell * 16 * dpr`, resets the transform, updates `layout`, and publishes the CSS size as the `--board` custom property so every row is exactly as wide as the board. Height decides the cell only while it can clear the 12 px floor; below that the width decides and the page scrolls.
-- `render()` — checker for empty cells, flat fill for painted cells, hairline grid, dashed mirror axis when `state.mirror`.
-- `cellFromPointer(ev)` — `getBoundingClientRect()` every time; returns `{x, y}` or `null` when outside or when `rect.width` is 0.
+- `measure()` — computes `cell` from the viewport, sets the canvas CSS size to `cell * 16` px, sets the backing size to `cell * 16 * dpr`, resets the transform, updates `layout`, and publishes the CSS size as the `--board` custom property so every row is exactly as wide as the board. Height decides the cell only while it can clear the 16 px floor (a 256 px board); below that the cell sits at the floor, capped by the width, and the page scrolls. There is no upper clamp: `.wrap`'s 420 px max-width already caps the cell at 26.
+- `render()` — checker for empty cells, flat fill for painted cells, a hairline grid stroked twice in alternating light and dark dashes so it reads over any fill, dashed mirror axis when `state.mirror`.
+- `cellFromPointer(ev)` — `getBoundingClientRect()` every time; returns `{x, y}` in board coordinates, bounded to 64 cells outside the board so a drag that leaves the board can still be walked as a line, or `null` only when `rect.width` is 0.
 - `poke(x, y, value)` — bounds-checked single-cell write to `pixels`, returns whether anything changed. The only function that mutates board content.
 - `write(x, y, value)` — one `poke` for the cell, plus a second for the mirror twin at `15 - x` when mirror is on. Every write to the board goes through here.
 - `line(x0, y0, x1, y1, value)` — Bresenham, calls `write` per cell.
-- `beginStroke / moveStroke / endStroke` — pointer capture, previous-cell tracking, undo snapshot on begin, save + status on end. Only a primary button starts a stroke, and `contextmenu` is suppressed on the canvas.
-- `restingText()` — the status line's resting text, derived from `state.erase` rather than being a constant, so the page's only instruction is true in both modes.
-- `setColor(i) / toggleErase() / toggleMirror() / undo() / clearBoard()` — state transitions, each ending in `render()` and `saveState()`. `clearBoard()` does nothing at all — no record, no announcement — on an already-empty board.
+- `beginStroke / moveStroke / endStroke` — pointer capture, previous-cell tracking, undo snapshot on begin, save + status on end. A sample outside the board is kept rather than dropped, so the line to it still paints the cells it crosses on the way out. Only a primary button starts a stroke, and `contextmenu` is suppressed on the canvas.
+- `restingText()` — the status line's resting text, derived from `state.erase` and `state.mirror` rather than being a constant, so the page's only instruction is true in every mode and the one sentence that explains Mirror rests there instead of expiring. Erase leads when both are on.
+- `setColor(i) / toggleErase() / toggleMirror() / undo() / clearBoard()` — state transitions, each ending in `saveState()`. The three that change board content or the axis — `toggleMirror()`, `undo()`, `clearBoard()` — also call `render()`; `setColor()` and `toggleErase()` change no pixel, so they only resync the controls and the status line. `clearBoard()` does nothing at all — no record, no announcement — on an already-empty board.
 - `onActivate(el, fn)` — activates a control from `click`, and additionally from `pointerup` for a non-primary touch pointer, because Chromium synthesises no click for a second finger while a first one rests on the board. The following click is swallowed once so nothing fires twice.
 - `toPng()` — 256×256 offscreen canvas, 16×16 `fillRect` blocks, empty cells left untouched so they stay transparent, returns a data URI.
-- `openExport() / closeExport() / trapTab(ev)` — panel show/hide, Escape and backdrop close, a wrap-around focus trap so the page behind the `aria-modal` panel is unreachable, and focus restored to `#export` on close.
+- `openExport() / closeExport() / trapTab(ev)` — panel show/hide, Escape and backdrop close, a wrap-around focus trap so the page behind the `aria-modal` panel is unreachable, and focus restored to `#export` on close. `openExport()` ends any live stroke first, so a second finger cannot open a picture of a board that is still changing, and it opens the scrim at its own top with `focus({preventScroll: true})`.
 - `watchDpr() / onDprChange()` — a `matchMedia('(resolution: Ndppx)')` subscription that re-lays-out when the device pixel ratio changes, re-armed at the new ratio each time.
 - `buildUI()` — creates the palette buttons and wires every listener. Called once.
 
@@ -96,11 +96,11 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` 390×844 pass: reach, tap sizes, rotate, no horizontal scroll
 - `done` hostile-localStorage pass over all eight bad values
 - `done` LICENSE (MIT), present since `682346b`
-- `todo` `screenshot.png` taken from the shipped build at phone width, mirror on
+- `done` `screenshot.png` taken from the shipped build at phone width, mirror on
 - `todo` README verified as a cold sequence from a fresh clone
 - `todo` repo description, topics, Pages enabled, demo link loads
 
-**Increment 7 — cycle-2 polish** (defect list `defects-cycle1.md`, D1–D23)
+**Increment 7 — cycle-2 polish** (the cycle-1 defect list, D1–D23)
 - `done` contrast: `--line` and `--muted` retoned, toggles and the primary export action given their own weight
 - `done` layout: board derived from the width once height runs short, every row aligned to `--board`, column centred on both axes
 - `done` export panel: reachable at landscape phone heights, square preview, focus trapped, download confirmed inside the panel
@@ -108,10 +108,25 @@ Layout truth lives in one small record: `layout = { cell, cssPx, dpr }`. The can
 - `done` render and state: one checker square per cell, state-derived status line, `v === 1` required, silent Clear on an empty board, swatches named by colour
 - `done` `origin` remote re-supplied
 
+**Increment 8 — cycle-3 defects** (the cycle-2 defect list, L1–L17)
+- `done` layout: `MIN_CELL` raised to 16 so the board never drops under 256, and the short-viewport fallback now takes the height budget as a cap, so the board can no longer grow as the viewport shrinks (it used to jump 192 → 352 between h=536 and h=520). Body side padding trimmed to 12 px so 256 still clears a 280 px viewport without a horizontal scrollbar
+- `done` landscape: a 844×390 phone now opens on a 256 px board with the palette starting at y=340, inside the fold, instead of a 416 px headless grid
+- `done` export panel: opens at its own top (`scrollTop = 0`, `focus({preventScroll: true})`) and the preview is capped at `42vh` of width, so at 844×390 the title, whole preview, download link and Close are all on screen without scrolling
+- `done` export panel: a live stroke is ended before the PNG is built, so a second finger cannot open a stale picture of a board that keeps painting
+- `done` pointer: a drag that leaves the board is clipped, not dropped — raw cell coordinates are tracked (bounded to 64 cells outside the board) and `poke()` skips whatever falls outside 0–15
+- `done` render: the hairline grid is stroked twice in alternating light and dark dashes; measured contrast over the twelve palette colours and both checker tones went from 1.00–1.28:1 to 2.17–4.49:1
+- `done` controls: hover no longer darkens a disabled Undo; the selection ring stays on the armed colour while Erase is on; Undo hands focus to Clear before disabling itself
+- `done` status: the Mirror sentence is now the resting text while Mirror is on, so it no longer expires after 2.4 s
+- `done` state: `loadState()` rejects a `pixels` string with any character outside hex 0–12 instead of zeroing that cell
+- `done` `MAX_CELL` deleted as dead code — `.wrap`'s 420 px max-width caps the cell at 26, so a 28 clamp could never fire
+- `done` docs: README "What it does" back inside the 2–5 sentence cap with the screenshot description moved to alt text, PROJECT.md realigned with the code
+- `todo` recapture `screenshot.png`: the 390×844 layout is unchanged (352 px board, 6×2 palette) but the grid dashes and the resting status line are new, so the committed image no longer matches the build
+
 ## Open threads
 
 - Export size fixed at 256×256 rather than a native 16×16 file. A 16×16 PNG is the purer artifact but shows as a speck in a file browser. Decision stands; the README states the size.
 - `download` on a `data:` URI is unreliable on iOS Safari. Mitigation shipped in v0: the panel shows the image so press-and-hold works. If a critic finds the link silently failing, the fallback text is already there.
 - Exact palette hexes are provisional. Constraint to hold: the white entry must stay distinguishable from the empty-cell checker, and the selection ring must read on both the black and the white swatch.
-- The cell used to come from `min(width, height)`, which on a short viewport bought a 192 px board *and* a scrollbar. It now falls back to the width alone once the height-derived cell would drop under the 12 px floor, and the page scrolls — swept across widths 280–1440 × heights 390–900, square and a whole multiple of 16 at every combination.
-- The export panel is taller than a landscape phone viewport: at 390 px of height the whole preview and the whole Close button cannot both be on screen at once, though every part of the panel is reachable by scrolling. Shrinking the preview on short viewports would cost its alignment with the buttons. Left as is.
+- The board is `max(16, min(byWidth, max(16, byHeight)))` cells: never under the 256 px floor, never wider than the column, and never larger than it was at a taller viewport. Below the floor the page scrolls. Swept across widths 280–1440 × heights 360–900 in 8 px steps, 10001 combinations: square, a whole multiple of 16, ≥ 256, no horizontal scroll, monotonically non-increasing as the height shrinks.
+- The export preview is capped at `42vh` of width so a landscape phone can see the whole panel at once. That cost the preview its flush alignment with the buttons under it on short viewports, and it is deliberate: the panel's job is showing the sprite before you save it. At 740×360 — shorter still — the Close button is 14 px below the fold and needs a small scroll; the title, preview and download link are all in view.
+- The hairline grid reads over every fill now but not at 3:1 everywhere: the mid-tone palette entries (Grey, Orange, Teal) sit around 2.2:1, and reaching 3:1 over them needs roughly 0.7 alpha, which stops being a hairline and starts being a lattice. Held at 0.45.
