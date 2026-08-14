@@ -298,12 +298,19 @@
        empty rather than be read as if it were v1. */
     if (data.v !== 1) { return; }
 
+    /* Scanned whole before anything is written: a record with one bad
+       character is a bad record, not a board with one bad cell. Repairing it
+       per character used to load "zzzz" + 252 digits as a 252-cell sprite. */
     var pixels = data.pixels;
     if (typeof pixels === 'string' && pixels.length === GRID * GRID) {
+      var vals = new Uint8Array(GRID * GRID);
+      var ok = true;
       for (var i = 0; i < GRID * GRID; i++) {
         var v = parseInt(pixels.charAt(i), 16);
-        state.pixels[i] = (isNaN(v) || v < 0 || v > 12) ? 0 : v;
+        if (!(v >= 0 && v <= 12)) { ok = false; break; }
+        vals[i] = v;
       }
+      if (ok) { state.pixels.set(vals); }
     }
 
     var color = Math.floor(Number(data.color));
