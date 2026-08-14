@@ -483,14 +483,27 @@
 
   /* ---------- pointer ---------- */
 
-  /* Always from the live rect; never from a stored cell constant. */
+  /* How far outside the board a sample is allowed to sit. The line walker runs
+     through these coordinates, so they have to stay small enough that a pointer
+     flung across the desktop cannot make it iterate for long; poke() drops
+     everything outside 0..15 anyway. */
+  var CELL_BOUND = 64;
+
+  function boundCell(v) {
+    if (!isFinite(v)) { return -CELL_BOUND; }
+    return Math.max(-CELL_BOUND, Math.min(GRID - 1 + CELL_BOUND, v));
+  }
+
+  /* Always from the live rect; never from a stored cell constant. Out-of-range
+     samples are kept, not discarded: a drag that leaves the board still has to
+     paint the cells it crossed on the way out, and poke() skips the rest. */
   function cellFromPointer(ev) {
     var rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) { return null; }
-    var x = Math.floor((ev.clientX - rect.left) / (rect.width / GRID));
-    var y = Math.floor((ev.clientY - rect.top) / (rect.height / GRID));
-    if (x < 0 || x >= GRID || y < 0 || y >= GRID) { return null; }
-    return { x: x, y: y };
+    if (!rect.width) { return null; }
+    var size = rect.width / GRID;
+    var x = Math.floor((ev.clientX - rect.left) / size);
+    var y = Math.floor((ev.clientY - rect.top) / size);
+    return { x: boundCell(x), y: boundCell(y) };
   }
 
   var stroke = { active: false, id: -1, last: null, changed: false, before: null };
@@ -513,12 +526,8 @@
   function moveStroke(ev) {
     if (!stroke.active || ev.pointerId !== stroke.id) { return; }
     var cell = cellFromPointer(ev);
-    if (!cell) {
-      /* Outside the board: skip, and forget the last cell so re-entry
-         starts a fresh segment instead of drawing a chord. */
-      stroke.last = null;
-      return;
-    }
+    /* Only a degenerate rect gives up: there is nothing to map against. */
+    if (!cell) { return; }
     var value = strokeValue();
     var changed;
     if (stroke.last) {
