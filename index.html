@@ -115,7 +115,9 @@
   .row.tools .btn[aria-pressed="false"] { background: transparent; }
   .btn:disabled { color: var(--muted); cursor: default; }
   .btn:focus-visible, .sw:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .btn:hover { border-color: var(--ink); }
+  /* A disabled Undo must not darken under the cursor: it was reading as the
+     loudest of the three actions while being the only dead one. */
+  .btn:hover:not(:disabled) { border-color: var(--ink); }
   .btn, .sw { transition: transform 90ms ease; }
   .btn:active, .sw:active { transform: scale(.97); }
   @media (prefers-reduced-motion: reduce) {
@@ -396,15 +398,27 @@
       }
     }
 
+    /* One ink hairline vanishes over the dark half of the palette — over black
+       it measured 1.00:1, no line at all — and one white hairline vanishes over
+       the light half. So the grid is stroked twice in alternating dashes, the
+       trick the mirror axis already uses: whichever pass the fill swallows, the
+       other one reads. Still one pixel wide, so it stays quiet. */
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(23,24,26,0.12)';
+    ctx.setLineDash([4, 4]);
     ctx.beginPath();
     for (var i = 1; i < GRID; i++) {
       var p = i * c + 0.5;
       ctx.moveTo(p, 0); ctx.lineTo(p, size);
       ctx.moveTo(0, p); ctx.lineTo(size, p);
     }
+    ctx.lineDashOffset = 0;
+    ctx.strokeStyle = 'rgba(23,24,26,0.45)';
     ctx.stroke();
+    ctx.lineDashOffset = 4;
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
 
     if (state.mirror) {
       /* Alternating light/dark dashes, so the axis reads over any colour. */
@@ -427,14 +441,20 @@
 
   var RESTING = 'Tap or drag to paint.';
   var RESTING_ERASE = 'Erasing.';
+  var RESTING_MIRROR = 'Mirror on: both halves paint together.';
+  var RESTING_ERASE_MIRROR = 'Erasing. Mirror on: both halves erase together.';
   var statusEl = document.getElementById('status');
   var statusTimer = 0;
 
-  /* The resting line is derived from state, not a constant: while erase is on
-     the page's only instruction has to say so, including after a reload and
-     after a transient message times out. */
+  /* The resting line is derived from state, not a constant: while erase or
+     mirror is on the page's only instruction has to say so, including after a
+     reload and after a transient message times out. The mirror sentence is the
+     one explanation of the dashed axis, so it rests here rather than expiring
+     after 2.4 seconds; erase leads when both are on, because it changes what
+     the next tap does. */
   function restingText() {
-    return state.erase ? RESTING_ERASE : RESTING;
+    if (state.erase) { return state.mirror ? RESTING_ERASE_MIRROR : RESTING_ERASE; }
+    return state.mirror ? RESTING_MIRROR : RESTING;
   }
 
   function setStatus(text) {
@@ -601,7 +621,8 @@
     syncControls();
     render();
     saveState();
-    setStatus(state.mirror ? 'Mirror on: both halves paint together.' : 'Mirror off.');
+    /* Mirror on lands on the resting text, so the explanation stays put. */
+    setStatus(state.mirror ? restingText() : 'Mirror off.');
   }
 
   /* Exactly one step, one stroke deep. */
@@ -609,6 +630,9 @@
     if (!state.undo) { return; }
     state.pixels.set(state.undo);
     state.undo = null;
+    /* Undo is about to disable itself and drop focus to <body>. Hand focus to
+       its neighbour first, but only if it was actually holding it. */
+    if (document.activeElement === undoBtn) { clearBtn.focus(); }
     syncControls();
     render();
     saveState();
@@ -635,9 +659,12 @@
   }
 
   function syncControls() {
+    /* The ring means "this is the armed colour", not "you are painting right
+       now": erase mode used to blank it, leaving nothing on screen to say what
+       colour comes back when Erase is switched off. The solid Erase pill
+       carries the mode on its own. */
     for (var i = 0; i < swatches.length; i++) {
-      swatches[i].setAttribute('aria-pressed',
-        (!state.erase && state.color === i + 1) ? 'true' : 'false');
+      swatches[i].setAttribute('aria-pressed', state.color === i + 1 ? 'true' : 'false');
     }
     eraseBtn.setAttribute('aria-pressed', state.erase ? 'true' : 'false');
     mirrorBtn.setAttribute('aria-pressed', state.mirror ? 'true' : 'false');
